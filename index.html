@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="SYDE 671 Assignment 4 report covering epipolar geometry, rectification, affine factorization, and projective structure from motion.">
+<title>SYDE 671 · Assignment 4 · Moksh Trehan</title>
+<link rel="stylesheet" href="style.css">
+<script src="report.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#overview">Skip to report</a>
+<header class="masthead">
+  <a class="wordmark" href="#overview">SYDE 671 <span>/ Assignment 4</span></a>
+  <nav aria-label="Report navigation">
+    <a href="#fundamental">Fundamental matrix</a><a href="#rectification">Rectification</a>
+    <a href="#factorization">Factorization</a><a href="#triangulation">Triangulation</a>
+    <a href="downloads/syde671-assignment4-report.pdf">Complete PDF ↗</a>
+  </nav>
+</header>
+<main>
+<section class="cover" id="overview">
+  <div class="cover-grid">
+    <div>
+      <p class="eyebrow">SYDE 671 / Assignment 4 / Fall 2026</p>
+      <h1>Two-view geometry.<br><em>From images to 3D.</em></h1>
+      <p class="lede">Fundamental matrices, stereo rectification, affine factorization, and projective reconstruction.</p>
+      <p class="byline">Moksh Trehan · November 15, 2026</p>
+    </div>
+    <figure class="cover-preview"><a href="#final-plot"><img src="images/statue-reconstruction.jpg" alt="Frontal and oblique views of a reconstructed statue"></a><figcaption><a href="#final-plot">View the statue reconstruction ↓</a></figcaption></figure>
+  </div>
+  <div class="stats">
+    <div><strong>&lt; 0.90 px</strong><span>Mean epipolar distance in every normalized fit</span></div>
+    <div><strong>20.00 → 0.63 px</strong><span>Median vertical mismatch after rectifying Set 1</span></div>
+    <div><strong>66,385 points</strong><span>Triangulated across three dense stereo pairs</span></div>
+  </div>
+  <p>Normalization improves the fundamental matrix on both supplied stereo pairs. The fitted epipolar geometry then makes the toy-house pair directly comparable along horizontal scanlines. Affine factorization recovers the broad 3D layout, but depth becomes poorly constrained in the near-planar subset. Projective triangulation and the supplied camera-merging pipeline recover the front of the statue from five photographs.</p>
+  <div class="contents" aria-label="Contents">
+    <a href="#fundamental">1 · Fundamental matrix estimation</a>
+    <a href="#rectification">2 · Matching homographies and rectification</a>
+    <a href="#factorization">3 · Affine structure from motion</a>
+    <a href="#triangulation">4 · Projective triangulation</a>
+    <a href="#statue">Statue reconstruction and reproducibility</a>
+  </div>
+  <div class="downloads"><a href="downloads/syde671-assignment4-report.pdf">Complete PDF</a><a href="downloads/syde671-assignment4-code.zip">Code ZIP</a><a href="downloads/measurements.json">Measurements</a></div>
+</section>
+
+<section class="report-section" id="fundamental">
+  <div class="section-title"><span>1(a–f)</span><h2>Fundamental matrix estimation</h2></div>
+  <p>Let <i>p</i><sub>1</sub> and <i>p</i><sub>2</sub> be matching homogeneous pixel coordinates. The convention is <i>p</i><sub>2</sub><sup>⊤</sup><i>Fp</i><sub>1</sub> = 0, so <i>Fp</i><sub>1</sub> is the line in Image 2.</p>
+  <h3>Linear and normalized eight-point fits</h3>
+  <p>Each match contributes one row to the design matrix, formed by flattening the outer product <i>p</i><sub>2</sub><i>p</i><sub>1</sub><sup>⊤</sup>. The last right singular vector minimizes the algebraic residual subject to a unit coefficient norm. After reshaping it into a 3 × 3 matrix, a second SVD sets the smallest singular value to zero and reconstructs a rank-two estimate.</p>
+  <p>The normalized version first centers each point set and rescales it so the mean distance from the origin is √2. It applies the same rank-two fit in normalized coordinates and returns <i>F</i> = <i>T</i><sub>2</sub><sup>⊤</sup><i>F̃T</i><sub>1</sub>. Centering and scaling keep the coordinate products and constants in the design matrix on comparable scales.</p>
+  <div class="matrix-grid"><article class="matrix"><h3>Set 1 · Linear</h3><pre> 0.000001552  -0.000008182  -0.001504401
+-0.000005870  -0.000000303  -0.011360761
+-0.003523120   0.014145388   0.999828068</pre></article><article class="matrix"><h3>Set 1 · Normalized</h3><pre> 0.000004455  -0.000036394   0.000603119
+-0.000033506  -0.000002322  -0.043914877
+-0.005847625   0.060308586   0.997195967</pre></article><article class="matrix"><h3>Set 2 · Linear</h3><pre> 0.000005631  -0.000027498   0.006426504
+ 0.000027762   0.000006747  -0.015218203
+-0.010762360   0.012251924   0.999730547</pre></article><article class="matrix"><h3>Set 2 · Normalized</h3><pre> 0.000013335  -0.000222048   0.013780217
+-0.000320320  -0.000028373  -0.619621780
+-0.020867223   0.752241693   0.222656232</pre></article></div>
+  <p class="caption">Each matrix has unit Frobenius norm. Its largest-magnitude entry is positive to fix the arbitrary projective sign. Nine decimal places preserve the small coefficients.</p>
+  <h3>Mean point-to-line distance</h3>
+  <p>For each match, form the line <i>ℓ</i> = <i>F</i><sup>⊤</sup><i>p</i><sub>2</sub> = (<i>a</i>, <i>b</i>, <i>c</i>)<sup>⊤</sup> in Image 1. For a pixel (<i>x</i>, <i>y</i>), the perpendicular distance is |<i>ax</i> + <i>by</i> + <i>c</i>| / √(<i>a</i>² + <i>b</i>²). Average over all matches, then swap views and transpose <i>F</i> for Image 2. The distance is invariant to the scale of <i>F</i>.</p>
+  <div class="table-scroll"><table><thead><tr><th scope="col">Pair</th><th scope="col">Matches</th><th scope="col">Estimator</th><th scope="col">Image 1 (px)</th><th scope="col">Image 2 (px)</th></tr></thead><tbody><tr><td>Set 1</td><td>37</td><td>Linear</td><td>28.0257</td><td>25.1629</td></tr><tr><td>Set 1</td><td>37</td><td>Normalized</td><td>0.8906</td><td>0.8287</td></tr><tr><td>Set 2</td><td>46</td><td>Linear</td><td>9.7014</td><td>14.5682</td></tr><tr><td>Set 2</td><td>46</td><td>Normalized</td><td>0.8895</td><td>0.8917</td></tr></tbody></table></div>
+  <p>Normalization reduced the mean distance from 9.70–28.03 px to 0.83–0.89 px across the four comparisons. These are residuals on the matched points used for the fit.</p>
+</section>
+
+<section class="report-section" id="epipolar-overlays">
+  <div class="section-title"><span>1(e–f)</span><h2>Epipolar lines on both pairs</h2></div>
+  <p>Within each figure, a colored dot represents an observed image point. The same-color line is predicted from its partner in the other image. The overlays show ten matches per pair for legibility. The reported distances use every match.</p>
+  <div class="gallery"><figure class=""><a class="image-link" href="images/set1-epipolar.jpg" aria-label="Enlarge figure 1"><img src="images/set1-epipolar.jpg" width="1326" height="1387" alt="Set 1 toy house stereo pair with epipolar lines"></a><figcaption><span class="fig-number">Figure 1.</span> Set 1. Linear estimates miss image features by tens of pixels. With normalization, the dots sit close to the matching lines in both images.</figcaption></figure><figure class=""><a class="image-link" href="images/set2-epipolar.jpg" aria-label="Enlarge figure 2"><img src="images/set2-epipolar.jpg" width="1326" height="1387" alt="Set 2 color stereo pair with epipolar lines"></a><figcaption><span class="fig-number">Figure 2.</span> Set 2. The same ten matches are shown for both estimators. Across all 46 matches, the normalized estimates average below one pixel in both directions.</figcaption></figure></div>
+</section>
+
+<section class="report-section" id="rectification">
+  <div class="section-title"><span>2(a–d)</span><h2>Matching homographies and rectification</h2></div>
+  <p>The epipoles satisfy <i>Fe</i><sub>1</sub> = 0 and <i>F</i><sup>⊤</sup><i>e</i><sub>2</sub> = 0. I obtained them from the null spaces of the normalized Set 1 fit. The computed homogeneous coordinates are (-1300.7859, -142.6614, 1.0000) and (1654.2241, 45.4263, 1.0000), respectively.</p>
+  <p>To construct <i>H</i><sub>2</sub>, translate the center of Image 2 to the origin, rotate its epipole onto the horizontal axis, and use the projective term to send it to infinity before undoing the translation. The first homography uses <i>H</i><sub>1</sub> = <i>H</i><sub>A</sub><i>H</i><sub>2</sub><i>M</i>, with <i>M</i> = [<i>e</i><sub>2</sub>]<sub>×</sub><i>F</i> + <i>e</i><sub>2</sub>[1 1 1]. A least-squares fit chooses the first row of <i>H</i><sub>A</sub> to reduce squared horizontal displacement. Its remaining rows keep vertical coordinates fixed. Both homographies send their epipoles to the horizontal point at infinity. I resampled the images by inverse warping with bilinear interpolation.</p>
+  <figure class=""><a class="image-link" href="images/rectified-pair.jpg" aria-label="Enlarge figure 3"><img src="images/rectified-pair.jpg" width="1627" height="914" alt="Rectified toy house stereo images sharing horizontal scanlines"></a><figcaption><span class="fig-number">Figure 3.</span> Both rectified images use a common vertical coordinate and the same pixel scale. Each guide marks the midpoint of a selected pair of transformed vertical coordinates. Black areas lie outside the input photographs.</figcaption></figure>
+  <div class="table-scroll"><table><thead><tr><th scope="col">Absolute vertical mismatch</th><th scope="col">Original (px)</th><th scope="col">Rectified (px)</th></tr></thead><tbody><tr><td>Mean</td><td>33.519</td><td>0.857</td></tr><tr><td>Median</td><td>20.000</td><td>0.629</td></tr><tr><td>RMS</td><td>47.177</td><td>1.161</td></tr><tr><td>95th percentile</td><td>98.600</td><td>2.000</td></tr><tr><td>Maximum</td><td>115.000</td><td>3.869</td></tr></tbody></table></div>
+  <div class="callout"><p><strong>Why matching gets easier.</strong> A point now predicts an approximately horizontal scanline in the other image. Matching can search along that row, or a narrow band around it to allow for error, and measure the remaining displacement as horizontal disparity.</p></div>
+</section>
+
+<section class="report-section" id="factorization">
+  <div class="section-title"><span>3(a–f)</span><h2>Affine structure from motion</h2></div>
+  <p>Stack the two views into four rows (<i>x</i><sub>1</sub>, <i>y</i><sub>1</sub>, <i>x</i><sub>2</sub>, <i>y</i><sub>2</sub>). Subtract each row mean to remove the image translations. The centered measurement matrix <i>W</i> factors into motion and structure by retaining its first three singular components.</p>
+  <pre class="formula">W ≈ M S     M = U₃ Σ₃¹ᐟ²     S = Σ₃¹ᐟ² V₃ᵀ</pre>
+  <div class="table-scroll"><table><thead><tr><th scope="col">Correspondences</th><th scope="col">Points</th><th scope="col">σ₁</th><th scope="col">σ₂</th><th scope="col">σ₃</th><th scope="col">σ₄</th><th scope="col">σ₄ / σ₃</th></tr></thead><tbody><tr><td>Full set</td><td>37</td><td>959.5852</td><td>540.4761</td><td>184.4317</td><td>27.9152</td><td>0.151</td></tr><tr><td>Subset</td><td>18</td><td>264.5440</td><td>210.0607</td><td>7.2192</td><td>5.1286</td><td>0.710</td></tr></tbody></table></div>
+  <p>In the ideal noiseless affine model, <i>M</i> is 4 × 3 and <i>S</i> is 3 × <i>N</i>, so <i>W</i> has at most three nonzero singular values. Three are expected when the scene and camera motion support three structure dimensions. An exactly planar scene can have rank two. Perspective effects and imperfect image measurements explain why the observed matrices have four nonzero values.</p>
+  <h3>Full set vs. supplied subset</h3>
+  <p>The full set recovers the broad layout of the reference. Centering, rotation and scale change the appearance of raw 3D coordinates without changing the shape. More generally the uncalibrated affine factors have a gauge: for any invertible <i>A</i>, replacing <i>M</i> with <i>MA</i> and <i>S</i> with <i>A</i><sup>−1</sup><i>S</i> gives the same image measurements. I fit one 3D rotation and uniform scale to each centered reconstruction for display. The residual is 14.5% of the centered ground-truth RMS for the full set and 19.8% for the subset.</p>
+  <figure class=""><a class="image-link" href="images/set1-factorization.png" aria-label="Enlarge figure 4"><img src="images/set1-factorization.png" width="1932" height="636" alt="Full-set 3D reconstruction and ground truth with planar projections"></a><figcaption><span class="fig-number">Figure 4.</span> All 37 points after a fitted rotation and uniform scale. Corresponding points are joined by thin lines. The two projections show the overall shape and depth.</figcaption></figure>
+  <figure class=""><a class="image-link" href="images/set1_subset-factorization.png" aria-label="Enlarge figure 5"><img src="images/set1_subset-factorization.png" width="1927" height="636" alt="Subset reconstruction showing spurious depth relative to the nearly planar ground truth"></a><figcaption><span class="fig-number">Figure 5.</span> The 18-point subset. The depth profile shows the small out-of-plane extent of the reference points and the stronger variation in recovered depth.</figcaption></figure>
+  <p>The subset covers an almost planar portion of the scene. Its ground-truth third-to-first singular-value ratio falls from 0.449 to 0.022. In image space, σ₃ falls sharply and σ₄ approaches it. The two dominant modes still describe the arrangement within the plane, but the data give the third mode little separation from the discarded fourth mode. The resulting depth errors are clearest in the side profiles.</p>
+</section>
+
+<section class="report-section" id="triangulation">
+  <div class="section-title"><span>4(a–e)</span><h2>Projective triangulation</h2></div>
+  <h3>Relative pose from the essential matrix</h3>
+  <p>Compute <i>E</i> = <i>K</i><sup>⊤</sup><i>FK</i> and take its SVD <i>UΣV</i><sup>⊤</sup>. The two candidate rotations come from <i>UWV</i><sup>⊤</sup> and <i>UW</i><sup>⊤</sup><i>V</i><sup>⊤</sup>, where <i>W</i> is a 90° rotation about the third axis. Multiplying each candidate by its determinant makes it a proper rotation. Pair each rotation with both signs of the third column of <i>U</i> to get four candidate poses. Translation magnitude is fixed to one because <i>E</i> determines its direction up to scale.</p>
+  <h3>Linear initialization and reprojection refinement</h3>
+  <p>For each camera <i>P</i><sub>i</sub> and observation (<i>x</i>, <i>y</i>), form the rows <i>xP</i><sub>i,3</sub> − <i>P</i><sub>i,1</sub> and <i>yP</i><sub>i,3</sub> − <i>P</i><sub>i,2</sub>. The last right singular vector of the stacked system gives a homogeneous 3D point. Divide by its fourth component to initialize the nonlinear estimate.</p>
+  <p>With <i>q</i> = <i>P</i><sub>i</sub>[<i>X</i> 1]<sup>⊤</sup>, the residual is the predicted pixel (<i>q</i><sub>1</sub>/<i>q</i><sub>3</sub>, <i>q</i><sub>2</sub>/<i>q</i><sub>3</sub>) minus the measured pixel. The quotient rule gives each Jacobian row.</p>
+  <pre class="formula">Jᵢ,ⱼ = (Pᵢ,ⱼ,1:3 − (qⱼ / q₃) Pᵢ,₃,1:3) / q₃   for j = 1, 2
+X ← X − J⁺e   for ten Gauss–Newton iterations</pre>
+  <p>Here 1:3 denotes the first three columns and <i>J</i><sup>+</sup> is the pseudoinverse of the stacked Jacobian. On the supplied four-view test case, the stacked reprojection residual norm decreased from 98.7354 px to 95.5948 px. The analytic Jacobian agreed with a central finite difference to 2.14e-09 maximum absolute error.</p>
+  <h3>Cheirality selects the camera pose</h3>
+  <p>For each candidate, triangulate the matches using <i>K</i>[<i>I</i> | 0] and <i>K</i>[<i>R</i> | <i>t</i>]. Count points with positive depth in both cameras by checking <i>X</i><sub>z</sub> and (<i>RX</i> + <i>t</i>)<sub>z</sub>. For B21–B22 only one candidate puts any supplied point in front of both cameras. Its entries agree with the starter’s pose reference within 4.51e-05.</p>
+  <div class="matrix-grid"><article class="matrix"><h3>Selected [R | t] · B21–B22</h3><pre> 0.973641  -0.098787  -0.205581   0.999412
+ 0.101892   0.994785   0.004545  -0.008870
+ 0.204060  -0.025372   0.978630   0.033112</pre></article><div class="table-scroll"><table><thead><tr><th scope="col">Pose candidate</th><th scope="col">Positive in both views</th></tr></thead><tbody><tr><td>1</td><td>0 / 50</td></tr><tr><td>2</td><td>0 / 50</td></tr><tr><td>3</td><td>50 / 50</td></tr><tr><td>4</td><td>0 / 50</td></tr></tbody></table></div></div>
+</section>
+
+<section class="report-section" id="statue">
+  <div class="section-title"><span>4(f)</span><h2>Statue reconstruction</h2></div>
+  <figure class=""><a class="image-link" href="images/statue-sources.jpg" aria-label="Enlarge figure 6"><img src="images/statue-sources.jpg" width="1228" height="184" alt="Five supplied photographs of the statue from different camera positions"></a><figcaption><span class="fig-number">Figure 6.</span> Statue source images B21 to B25, in acquisition order. The camera sees different amounts of the head, shoulders and pedestal as it moves.</figcaption></figure>
+  <p>With a focal length of 719.5459 px and image-centered coordinates, the supplied frame-merging and bundle-adjustment routines registered five camera poses and retained 152 sparse tracks. I retained the starter’s dense plotting range, which triangulates B21–B22, B22–B23 and B23–B24 and yields 66,385 finite points. The frontal view recovers the head and pedestal, while the oblique view shows the depth and incomplete surface coverage.</p>
+  <figure class="cloud" id="final-plot"><a class="image-link" href="images/statue-reconstruction.jpg" aria-label="Enlarge figure 7"><img src="images/statue-reconstruction.jpg" width="1424" height="704" alt="Frontal and oblique projections of the reconstructed statue cloud"></a><figcaption><span class="fig-number">Figure 7.</span> 66,385 triangulated points shown at the same scale from two orthographic viewpoints. Color encodes depth in the reconstruction coordinate frame, with yellow nearer and purple farther.</figcaption></figure>
+  <h3>Why a house is harder</h3>
+  <p>A larger structure needs more views and enough overlap to link them. Windows and facade patterns can create ambiguous matches, textureless walls give few reliable points, and corners or vegetation can occlude surfaces. With approximate rectified depth <i>Z</i> = <i>fB</i>/<i>d</i>, the same disparity error causes larger depth error at greater distance. Small nearby baselines give weak depth, while large viewpoint changes can break correspondences. Longer chains also allow pose and scale error to accumulate unless additional widely separated views constrain the reconstruction.</p>
+  <h3>Reproduce the report</h3>
+  <pre class="command">python -m pip install -r requirements.txt
+python generate_results.py
+python build_report.py</pre>
+  <p>The four submitted modules retain the starter function names. The result generator checks exact synthetic stereo and affine cases, numerical rank, epipole mapping, the Jacobian and the supplied reference pose. The code package includes the source data and the full-precision measurements used here.</p>
+  <div class="downloads"><a href="downloads/syde671-assignment4-code.zip">Code ZIP</a><a href="downloads/measurements.json">Measurements</a><a href="downloads/statue-points.npz">Triangulated points</a><a href="images/rectified-1.png">Rectified Image 1</a><a href="images/rectified-2.png">Rectified Image 2</a></div>
+  <h3>References</h3>
+  <ol class="references">
+    <li>University of Waterloo, SYDE 671 Assignment 4, Fall 2026. Handout, Python starter and data. Adapted from Stanford CS231A.</li>
+    <li>Stanford University, CS231A, <a href="https://web.stanford.edu/class/cs231a/hw_2025_spring/ps2.pdf">Problem Set 2</a>, Spring 2025.</li>
+    <li>R. Hartley and A. Zisserman, <a href="https://www.robots.ox.ac.uk/~vgg/hzbook/">Multiple View Geometry in Computer Vision</a>, second edition, Cambridge University Press, 2004, chapters 9–12.</li>
+    <li>C. Tomasi and T. Kanade, <a href="https://doi.org/10.1007/BF00129684">Shape and Motion from Image Streams under Orthography: A Factorization Method</a>, IJCV 9, 137–154, 1992.</li>
+  </ol>
+</section>
+</main>
+<footer><span>SYDE 671 · Assignment 4</span><span>Moksh Trehan · 2026</span></footer>
+<dialog id="image-dialog" aria-label="Enlarged figure">
+  <div class="dialog-toolbar"><span id="dialog-caption"></span><a id="dialog-original" href="#overview">Open original</a><button id="dialog-close" type="button">Close</button></div>
+  <img id="dialog-image" alt="">
+</dialog>
+</body>
+</html>
